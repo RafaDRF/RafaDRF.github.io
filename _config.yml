@@ -1,55 +1,71 @@
-# Welcome to Jekyll!
-#
-# This config file is meant for settings that affect your whole blog, values
-# which you are expected to set up once and rarely edit after that. If you find
-# yourself editing this file very often, consider using Jekyll's data files
-# feature for the data you need to update frequently.
-#
-# For technical reasons, this file is *NOT* reloaded automatically when you use
-# 'bundle exec jekyll serve'. If you change this file, please restart the server process.
-#
-# If you need help with YAML syntax, here are some quick references for you:
-# https://learn-the-web.algonquindesign.ca/topics/markdown-yaml-cheat-sheet/#yaml
-# https://learnxinyminutes.com/docs/yaml/
-#
-# Site settings
-# These are used to personalize your new site. If you look in the HTML files,
-# you will see them accessed via {{ site.title }}, {{ site.email }}, and so on.
-# You can create any custom variable you would like, and they will be accessible
-# in the templates via {{ site.myvariable }}.
+name: "Build and Deploy"
+on:
+  push:
+    branches:
+      - main
+      - master
+    paths-ignore:
+      - .gitignore
+      - README.md
+      - LICENSE
 
-title: Your awesome title
-email: your-email@example.com
-description: >- # this means to ignore newlines until "baseurl:"
-  Write an awesome description for your new site here. You can edit this
-  line in _config.yml. It will appear in your document head meta (for
-  Google search results) and in your feed.xml site description.
-baseurl: "" # the subpath of your site, e.g. /blog
-url: "https://rafadrf.github.io/" # the base hostname & protocol for your site, e.g. http://example.com
-twitter_username: jekyllrb
-github_username:  jekyll
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
 
-# Build settings
-theme: minima
-plugins:
-  - jekyll-feed
+permissions:
+  contents: read
+  pages: write
+  id-token: write
 
-# Exclude from processing.
-# The following items will not be processed, by default.
-# Any item listed under the `exclude:` key here will be automatically added to
-# the internal "default list".
-#
-# Excluded items can be processed by explicitly listing the directories or
-# their entries' file path in the `include:` list.
-#
-# exclude:
-#   - .sass-cache/
-#   - .jekyll-cache/
-#   - gemfiles/
-#   - Gemfile
-#   - Gemfile.lock
-#   - node_modules/
-#   - vendor/bundle/
-#   - vendor/cache/
-#   - vendor/gems/
-#   - vendor/ruby/
+# Allow one concurrent deployment
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          # submodules: true
+          # If using the 'assets' git submodule from Chirpy Starter, uncomment above
+          # (See: https://github.com/cotes2020/chirpy-starter/tree/main/assets)
+
+      - name: Setup Pages
+        id: pages
+        uses: actions/configure-pages@v3
+
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: 3   # reads from a '.ruby-version' or '.tools-version' file if 'ruby-version' is omitted
+          bundler-cache: true
+
+      - name: Build site
+        run: bundle exec jekyll b -d "_site${{ steps.pages.outputs.base_path }}"
+        env:
+          JEKYLL_ENV: "production"
+
+      - name: Test site
+        run: |
+          bundle exec htmlproofer _site --disable-external --check-html --allow_hash_href
+
+      - name: Upload site artifact
+        uses: actions/upload-pages-artifact@v1
+        with:
+          path: "_site${{ steps.pages.outputs.base_path }}"
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v1
